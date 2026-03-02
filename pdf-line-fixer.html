@@ -1,0 +1,807 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PDF Line Fixer</title>
+<style>
+/* ── Reset & Base ──────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --blue: #0078d4;
+  --blue-dark: #106ebe;
+  --blue-light: #deecf9;
+  --green: #107c10;
+  --green-bg: #dff6dd;
+  --red: #a80000;
+  --red-bg: #fde7e9;
+  --yellow: #835c00;
+  --yellow-bg: #fff4ce;
+  --gray-50: #faf9f8;
+  --gray-100: #f3f2f1;
+  --gray-200: #edebe9;
+  --gray-300: #d2d0ce;
+  --gray-500: #605e5c;
+  --gray-700: #323130;
+  --gray-900: #201f1e;
+  --radius: 8px;
+  --shadow: 0 2px 8px rgba(0,0,0,0.08);
+}
+
+body {
+  font-family: "Segoe UI", -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif;
+  background: var(--gray-100);
+  color: var(--gray-700);
+  line-height: 1.6;
+  min-height: 100vh;
+}
+
+/* ── Layout ────────────────────────────────────────────────── */
+.app {
+  max-width: 1000px;
+  margin: 0 auto;
+  padding: 24px 20px 40px;
+}
+
+header {
+  text-align: center;
+  margin-bottom: 20px;
+}
+
+header h1 { font-size: 22px; font-weight: 700; color: var(--gray-900); margin-bottom: 4px; }
+header p { font-size: 14px; color: var(--gray-500); }
+
+/* ── Mode Selector (tabs) ──────────────────────────────────── */
+.mode-tabs {
+  display: flex;
+  gap: 0;
+  margin-bottom: 0;
+  border-bottom: 2px solid var(--gray-200);
+}
+
+.mode-tab {
+  flex: 1;
+  padding: 12px 16px;
+  border: none;
+  background: transparent;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--gray-500);
+  cursor: pointer;
+  border-bottom: 3px solid transparent;
+  margin-bottom: -2px;
+  transition: color 0.15s, border-color 0.15s;
+  text-align: center;
+}
+
+.mode-tab:hover { color: var(--gray-700); }
+
+.mode-tab.active {
+  color: var(--blue);
+  border-bottom-color: var(--blue);
+}
+
+.mode-tab .tab-icon { font-size: 16px; display: block; margin-bottom: 2px; }
+
+/* ── Mode Description ──────────────────────────────────────── */
+.mode-desc {
+  background: var(--blue-light);
+  border-radius: 0 0 var(--radius) var(--radius);
+  padding: 12px 16px;
+  margin-bottom: 16px;
+  font-size: 13px;
+  color: #004578;
+  line-height: 1.6;
+}
+
+.mode-desc strong { color: #002050; }
+
+/* ── Mode-specific controls ────────────────────────────────── */
+.mode-options {
+  display: none;
+  margin-bottom: 16px;
+}
+
+.mode-options.visible { display: block; }
+
+.marker-help {
+  background: #fff;
+  border: 1px solid var(--gray-200);
+  border-radius: var(--radius);
+  padding: 12px 16px;
+  font-size: 13px;
+  color: var(--gray-700);
+  line-height: 1.7;
+}
+
+.marker-help code {
+  background: var(--gray-100);
+  padding: 1px 6px;
+  border-radius: 3px;
+  font-size: 12px;
+  color: var(--blue-dark);
+}
+
+.sensitivity-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: #fff;
+  border: 1px solid var(--gray-200);
+  border-radius: var(--radius);
+  padding: 12px 16px;
+}
+
+.sensitivity-row label { font-size: 13px; font-weight: 600; color: var(--gray-500); white-space: nowrap; }
+
+input[type="range"] {
+  width: 140px;
+  height: 4px;
+  -webkit-appearance: none;
+  appearance: none;
+  background: var(--gray-300);
+  border-radius: 2px;
+  outline: none;
+}
+
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 16px; height: 16px;
+  background: var(--blue);
+  border-radius: 50%;
+  cursor: pointer;
+}
+
+input[type="range"]::-moz-range-thumb {
+  width: 16px; height: 16px;
+  background: var(--blue);
+  border-radius: 50%;
+  border: none;
+  cursor: pointer;
+}
+
+.sensitivity-ends {
+  display: flex;
+  justify-content: space-between;
+  width: 140px;
+  font-size: 10px;
+  color: var(--gray-300);
+  margin-top: -2px;
+}
+
+.sensitivity-val {
+  font-weight: 700;
+  color: var(--blue);
+  min-width: 14px;
+  text-align: center;
+  font-size: 13px;
+}
+
+/* ── Panels ────────────────────────────────────────────────── */
+.panels {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+@media (max-width: 700px) {
+  .panels { grid-template-columns: 1fr; }
+}
+
+.panel {
+  background: #fff;
+  border: 1px solid var(--gray-200);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  display: flex;
+  flex-direction: column;
+}
+
+.panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--gray-200);
+  background: var(--gray-50);
+  border-radius: var(--radius) var(--radius) 0 0;
+}
+
+.panel-header h2 {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--gray-500);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.panel-header .badge {
+  font-size: 11px;
+  color: var(--gray-500);
+  background: var(--gray-100);
+  padding: 2px 8px;
+  border-radius: 10px;
+}
+
+textarea {
+  flex: 1;
+  min-height: 300px;
+  border: none;
+  outline: none;
+  resize: vertical;
+  padding: 14px;
+  font-family: "Segoe UI", -apple-system, sans-serif;
+  font-size: 14px;
+  line-height: 1.7;
+  color: var(--gray-700);
+  background: #fff;
+  border-radius: 0 0 var(--radius) var(--radius);
+}
+
+textarea::placeholder { color: var(--gray-300); }
+#output { background: var(--gray-50); cursor: default; }
+
+/* ── Controls ──────────────────────────────────────────────── */
+.controls {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 9px 20px;
+  border: none;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s, transform 0.1s;
+  white-space: nowrap;
+}
+
+.btn:active { transform: scale(0.97); }
+.btn:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+
+.btn-primary { background: var(--blue); color: #fff; }
+.btn-primary:hover { background: var(--blue-dark); }
+
+.btn-secondary { background: #fff; color: var(--gray-700); border: 1px solid var(--gray-300); }
+.btn-secondary:hover { background: var(--gray-100); }
+
+.btn-clear { background: transparent; color: var(--gray-500); border: 1px solid transparent; font-weight: 500; }
+.btn-clear:hover { color: var(--red); }
+
+/* ── Status ────────────────────────────────────────────────── */
+.status {
+  padding: 10px 14px;
+  border-radius: 6px;
+  font-size: 13px;
+  display: none;
+  margin-bottom: 16px;
+}
+
+.status.visible { display: flex; align-items: center; gap: 8px; }
+.status.success { background: var(--green-bg); color: var(--green); border-left: 3px solid var(--green); }
+.status.warning { background: var(--yellow-bg); color: var(--yellow); border-left: 3px solid #ffb900; }
+.status.error { background: var(--red-bg); color: var(--red); border-left: 3px solid #d13438; }
+.status.info { background: var(--blue-light); color: #004578; border-left: 3px solid var(--blue); }
+
+/* ── Drop Overlay ──────────────────────────────────────────── */
+.drop-overlay {
+  display: none; position: fixed; inset: 0;
+  background: rgba(0, 120, 212, 0.08);
+  border: 3px dashed var(--blue); z-index: 100;
+  align-items: center; justify-content: center;
+  font-size: 18px; font-weight: 600; color: var(--blue);
+  pointer-events: none; border-radius: 12px; margin: 8px;
+}
+.drop-overlay.active { display: flex; }
+
+/* ── Footer ────────────────────────────────────────────────── */
+footer { text-align: center; padding-top: 20px; border-top: 1px solid var(--gray-200); margin-top: 8px; }
+footer p { font-size: 12px; color: var(--gray-500); line-height: 1.8; }
+footer a { color: var(--blue); text-decoration: none; }
+footer a:hover { text-decoration: underline; }
+
+@keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+.status.visible { animation: fadeIn 0.2s ease; }
+</style>
+</head>
+<body>
+
+<div class="drop-overlay" id="dropOverlay">Drop .txt file here</div>
+
+<div class="app">
+  <header>
+    <h1>PDF Line Fixer</h1>
+    <p>Paste text copied from a PDF &mdash; choose a mode below to fix broken line breaks.</p>
+  </header>
+
+  <!-- ── Mode Tabs ──────────────────────────────────────────── -->
+  <div class="mode-tabs">
+    <button class="mode-tab active" data-mode="smart">
+      <span class="tab-icon">&#9881;</span>
+      Smart Merge
+    </button>
+    <button class="mode-tab" data-mode="manual">
+      <span class="tab-icon">&#9998;</span>
+      Manual Markers
+    </button>
+    <button class="mode-tab" data-mode="single">
+      <span class="tab-icon">&#182;</span>
+      Single Paragraph
+    </button>
+  </div>
+
+  <!-- ── Mode Descriptions ──────────────────────────────────── -->
+  <div class="mode-desc" id="desc-smart">
+    <strong>Smart Merge</strong> &mdash; The tool automatically analyses text structure to decide where
+    the real paragraph breaks are. It looks at punctuation, capitalisation, numbering patterns
+    (e.g. (a), 1., Section), and line length to distinguish real paragraph breaks from
+    false ones introduced by the PDF column width. Best for multi-paragraph text.
+  </div>
+  <div class="mode-desc" id="desc-manual" style="display:none">
+    <strong>Manual Markers</strong> &mdash; You decide where the paragraph breaks are.
+    Type <strong>==</strong> anywhere in the text to mark a paragraph break.
+    All line breaks are removed; only your <strong>==</strong> markers create paragraph breaks.
+  </div>
+  <div class="mode-desc" id="desc-single" style="display:none">
+    <strong>Single Paragraph</strong> &mdash; Use this when you copied exactly one paragraph from a PDF.
+    All line breaks are removed and the text is joined into one continuous paragraph. No analysis needed.
+  </div>
+
+  <!-- ── Mode-specific Options ──────────────────────────────── -->
+  <div class="mode-options" id="opts-manual" style="display:none">
+    <div class="marker-help">
+      Type <code>==</code> anywhere you want a paragraph break &mdash; it can be inline, at the end of a line,
+      or on its own line. Everything between markers is merged into one paragraph. Example:<br><br>
+      <code>This is the first paragraph which wraps across two lines.==This is the second paragraph which also wraps.</code>
+      <br><br>Or across lines:<br><br>
+      <code>First paragraph line one<br>
+      line two of first paragraph.==<br>
+      Second paragraph line one<br>
+      line two of second paragraph.</code>
+    </div>
+  </div>
+
+  <div class="mode-options" id="opts-smart">
+    <div class="sensitivity-row">
+      <label for="sensitivity">Sensitivity:</label>
+      <div>
+        <input type="range" id="sensitivity" min="1" max="5" value="3" step="1">
+        <div class="sensitivity-ends">
+          <span>Conservative</span>
+          <span>Aggressive</span>
+        </div>
+      </div>
+      <span class="sensitivity-val" id="sensitivityVal">3</span>
+      <span style="font-size:12px; color:var(--gray-500); margin-left:8px">
+        Lower = fewer merges (safer) &middot; Higher = more merges (bolder)
+      </span>
+    </div>
+  </div>
+
+  <!-- ── Input / Output Panels ──────────────────────────────── -->
+  <div class="panels">
+    <div class="panel">
+      <div class="panel-header">
+        <h2>Input</h2>
+        <span class="badge" id="inputCount">0 lines</span>
+      </div>
+      <textarea id="input" placeholder="Paste your PDF text here (multiple paragraphs).&#10;The algorithm will automatically detect paragraph boundaries."></textarea>
+    </div>
+    <div class="panel">
+      <div class="panel-header">
+        <h2>Output</h2>
+        <span class="badge" id="outputCount">0 paragraphs</span>
+      </div>
+      <textarea id="output" readonly placeholder="Fixed paragraphs will appear here."></textarea>
+    </div>
+  </div>
+
+  <!-- ── Action Buttons ─────────────────────────────────────── -->
+  <div class="controls">
+    <button class="btn btn-primary" id="btnFix">Fix Line Breaks</button>
+    <button class="btn btn-secondary" id="btnCopy">Copy Result</button>
+    <button class="btn btn-clear" id="btnClear">Clear</button>
+  </div>
+
+  <div id="status" class="status"></div>
+
+  <footer>
+    <p>
+      This tool is designed to work locally in your browser &mdash; all processing is designed to run locally on your device.
+      <br>
+      <a href="https://github.com/YOUR_USERNAME/pdf-line-fixer" target="_blank">GitHub</a>
+      &nbsp;|&nbsp; MIT License
+    </p>
+  </footer>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════ -->
+<!-- MERGER ALGORITHM                                           -->
+<!-- ═══════════════════════════════════════════════════════════ -->
+<script>
+(function (root) {
+  "use strict";
+
+  const DEFAULT_OPTIONS = {
+    threshold: 0,
+    weights: {
+      noTerminalPunctuation:  4,
+      nextStartsLowercase:    4,
+      hyphenatedEnd:          5,
+      similarLineLength:      1,
+      terminalPuncAndUpper:  -4,
+      shortTailLine:         -3,
+      nextIsBlank:          -99,
+      nextIsHeading:         -5,
+      semicolonBeforeNumbered: -99,
+      nextIsIndented:        -2,
+    },
+  };
+
+  const TERMINAL_PUNCT = /[.!?:]\s*$/;
+  const SEMICOLON_TERMINAL = /;[\)\]]\s*$/;
+  const HYPHENATED_END = /-\s*$/;
+  const STARTS_LOWERCASE = /^[a-z]/;
+  const STARTS_UPPERCASE = /^[A-Z]/;
+  const HEADING_PATTERN = new RegExp(
+    "^(" +
+      "\\d+[.):]\\s?" +
+      "|\\([a-zA-Z0-9]{1,3}\\)" +
+      "|\\([a-zA-Z0-9]{4}\\)\\s" +
+      "|\\[[a-zA-Z0-9]{1,3}\\]" +
+      "|\\[[a-zA-Z0-9]{4}\\]\\s" +
+      "|[a-zA-Z]{1,4}[.):]\\s" +
+      "|(?:Article|Section|Clause|Part|Schedule|Appendix|Exhibit|Annex|Recital|WHEREAS|NOW\\s*,?\\s*THEREFORE|IN WITNESS)" +
+      "|[\\u2022\\u2023\\u25E6\\u2043\\u2219\u2022\u25CF\u25CB\u25A0\u25A1\u25AA\u25AB\u2013\u2014]\\s" +
+    ")", "i"
+  );
+  const NUMBERED_ITEM = new RegExp(
+    "^(" +
+      "\\d+[.):]\\s?" +
+      "|\\([a-zA-Z0-9]{1,3}\\)" +
+      "|\\[[a-zA-Z0-9]{1,3}\\]" +
+      "|[a-zA-Z]{1,4}[.):]\\s" +
+    ")"
+  );
+  const ENDS_SEMICOLON = /;\s*$/;
+  const IS_BLANK = /^\s*$/;
+  const IS_INDENTED = /^(?:\t|  )/;
+  const PAGE_NUMBER = /^Page\s+\d+\s*$/i;
+
+  function scorePairwise(lines, i, avgLen, w) {
+    const current = lines[i].trimEnd();
+    const next = lines[i + 1];
+    let score = 0;
+
+    if (IS_BLANK.test(next) || IS_BLANK.test(current)) return w.nextIsBlank;
+    const nextTrimmed = next.trimStart();
+
+    const isTerminal = TERMINAL_PUNCT.test(current) || SEMICOLON_TERMINAL.test(current);
+    if (!isTerminal) score += w.noTerminalPunctuation;
+    if (STARTS_LOWERCASE.test(nextTrimmed)) score += w.nextStartsLowercase;
+    if (HYPHENATED_END.test(current)) score += w.hyphenatedEnd;
+
+    if (avgLen > 0) {
+      const curRatio = current.length / avgLen;
+      if (curRatio > 0.7 && curRatio < 1.3) score += w.similarLineLength;
+    }
+
+    if (isTerminal && STARTS_UPPERCASE.test(nextTrimmed)) score += w.terminalPuncAndUpper;
+    if (avgLen > 0 && current.length < avgLen * 0.5 && current.length > 0) score += w.shortTailLine;
+    if (HEADING_PATTERN.test(nextTrimmed)) score += w.nextIsHeading;
+    var headingMaxLen = Math.max(avgLen * 0.7, 50);
+    if (HEADING_PATTERN.test(current.trimStart()) && current.trim().length < headingMaxLen) score += w.nextIsHeading;
+    if (ENDS_SEMICOLON.test(current) && NUMBERED_ITEM.test(nextTrimmed)) return w.semicolonBeforeNumbered;
+    if (IS_INDENTED.test(next) && !IS_INDENTED.test(lines[i])) score += w.nextIsIndented;
+
+    return score;
+  }
+
+  function mergeParagraphs(paragraphs, options) {
+    const opts = Object.assign({}, DEFAULT_OPTIONS, options);
+    const w = Object.assign({}, DEFAULT_OPTIONS.weights, opts.weights);
+    const threshold = opts.threshold;
+
+    if (!paragraphs || paragraphs.length === 0) {
+      return { merged: [], mergeCount: 0, details: [] };
+    }
+
+    // Pre-processing: strip standalone page-number lines (e.g. "Page 2", "Page 15")
+    const lines = paragraphs.filter(l => !PAGE_NUMBER.test(l.trim()));
+    const nonBlank = lines.filter(l => !IS_BLANK.test(l));
+    const avgLen = nonBlank.length > 0
+      ? nonBlank.reduce((sum, l) => sum + l.trim().length, 0) / nonBlank.length : 0;
+
+    const result = [];
+    const details = [];
+    let buffer = lines[0];
+    let mergeCount = 0;
+
+    for (let i = 0; i < lines.length - 1; i++) {
+      const score = scorePairwise(lines, i, avgLen, w);
+      const shouldMerge = score > threshold;
+      details.push({ lineIndex: i, score, decision: shouldMerge ? "MERGE" : "KEEP" });
+
+      if (shouldMerge) {
+        const trimmedBuffer = buffer.trimEnd();
+        const nextLine = lines[i + 1];
+        if (HYPHENATED_END.test(trimmedBuffer)) {
+          buffer = trimmedBuffer.replace(/-\s*$/, "") + nextLine.trimStart();
+        } else {
+          buffer = trimmedBuffer + " " + nextLine.trimStart();
+        }
+        mergeCount++;
+      } else {
+        result.push(buffer);
+        buffer = lines[i + 1];
+      }
+    }
+    result.push(buffer);
+
+    return { merged: result, mergeCount, details };
+  }
+
+  function sensitivityToThreshold(s) {
+    return { 1: 3, 2: 2, 3: 0, 4: -1, 5: -3 }[s] || 0;
+  }
+
+  root.PDFLineFixer = { mergeParagraphs, sensitivityToThreshold, scorePairwise, DEFAULT_OPTIONS };
+})(window);
+</script>
+
+<!-- ═══════════════════════════════════════════════════════════ -->
+<!-- APP LOGIC                                                  -->
+<!-- ═══════════════════════════════════════════════════════════ -->
+<script>
+(function () {
+  "use strict";
+
+  // ── DOM ────────────────────────────────────────────────────
+  const inputEl       = document.getElementById("input");
+  const outputEl      = document.getElementById("output");
+  const btnFix        = document.getElementById("btnFix");
+  const btnCopy       = document.getElementById("btnCopy");
+  const btnClear      = document.getElementById("btnClear");
+  const sensitivityEl = document.getElementById("sensitivity");
+  const sensitivityVal = document.getElementById("sensitivityVal");
+  const statusEl      = document.getElementById("status");
+  const inputCount    = document.getElementById("inputCount");
+  const outputCount   = document.getElementById("outputCount");
+  const dropOverlay   = document.getElementById("dropOverlay");
+
+  const tabs      = document.querySelectorAll(".mode-tab");
+  const descSingle = document.getElementById("desc-single");
+  const descManual = document.getElementById("desc-manual");
+  const descSmart  = document.getElementById("desc-smart");
+  const optsManual = document.getElementById("opts-manual");
+  const optsSmart  = document.getElementById("opts-smart");
+
+  let currentMode = "smart";
+
+  const MARKER_SPLIT = /={2,}/;  // == or more, anywhere in text
+
+  // ── Mode Switching ─────────────────────────────────────────
+  tabs.forEach(function (tab) {
+    tab.addEventListener("click", function () {
+      currentMode = tab.getAttribute("data-mode");
+      tabs.forEach(function (t) { t.classList.remove("active"); });
+      tab.classList.add("active");
+
+      // Descriptions
+      descSingle.style.display = currentMode === "single" ? "" : "none";
+      descManual.style.display = currentMode === "manual" ? "" : "none";
+      descSmart.style.display  = currentMode === "smart"  ? "" : "none";
+
+      // Options
+      optsManual.style.display = currentMode === "manual" ? "" : "none";
+      optsSmart.style.display  = currentMode === "smart"  ? "" : "none";
+
+      // Update placeholder
+      if (currentMode === "single") {
+        inputEl.placeholder = "Paste a single paragraph from your PDF here.\nAll line breaks will be removed.";
+      } else if (currentMode === "manual") {
+        inputEl.placeholder = "Paste your PDF text here.\nType == wherever you want a paragraph break (inline or on its own line).";
+      } else {
+        inputEl.placeholder = "Paste your PDF text here (multiple paragraphs).\nThe algorithm will automatically detect paragraph boundaries.";
+      }
+
+      // Clear status
+      statusEl.className = "status";
+    });
+  });
+
+  // ── Fix Button ─────────────────────────────────────────────
+  btnFix.addEventListener("click", function () {
+    const raw = inputEl.value;
+    if (!raw.trim()) {
+      showStatus("Paste some text first.", "warning");
+      return;
+    }
+
+    if (currentMode === "single") {
+      fixSingleParagraph(raw);
+    } else if (currentMode === "manual") {
+      fixManualMarkers(raw);
+    } else {
+      fixSmartMerge(raw);
+    }
+  });
+
+  // ── Mode 1: Single Paragraph ──────────────────────────────
+  function fixSingleParagraph(raw) {
+    const lines = raw.split(/\n/).filter(function (l) { return l.trim().length > 0; });
+    const HYPHEN_END = /-\s*$/;
+    let result = "";
+
+    for (let i = 0; i < lines.length; i++) {
+      const trimmed = lines[i].trim();
+      if (result.length === 0) {
+        result = trimmed;
+      } else if (HYPHEN_END.test(result)) {
+        result = result.replace(/-\s*$/, "") + trimmed;
+      } else {
+        result = result + " " + trimmed;
+      }
+    }
+
+    outputEl.value = result;
+    outputCount.textContent = "1 paragraph";
+    showStatus(
+      "Joined " + lines.length + " lines into 1 paragraph.",
+      "success"
+    );
+  }
+
+  // ── Mode 2: Manual Markers ────────────────────────────────
+  function fixManualMarkers(raw) {
+    // Step 1: Flatten all line breaks into spaces (just like single-paragraph mode)
+    const flat = raw.replace(/\r?\n/g, " ");
+
+    // Step 2: Split on == (two or more equals signs)
+    const chunks = flat.split(MARKER_SPLIT);
+    const markerCount = chunks.length - 1;
+
+    // Step 3: Clean up each chunk — trim, collapse whitespace, rejoin hyphens
+    const HYPHEN_END = /-\s+/;
+    const paragraphs = [];
+    for (let i = 0; i < chunks.length; i++) {
+      let text = chunks[i].trim().replace(/\s+/g, " ");
+      // Rejoin hyphenated words (e.g. "constitu- tional" → "constitutional")
+      text = text.replace(/-\s+(?=[a-z])/g, "");
+      if (text.length > 0) {
+        paragraphs.push(text);
+      }
+    }
+
+    outputEl.value = paragraphs.join("\n\n");
+    outputCount.textContent = paragraphs.length + " paragraph" + (paragraphs.length !== 1 ? "s" : "");
+
+    if (markerCount === 0) {
+      showStatus(
+        "No == markers found. All text was joined into " + paragraphs.length + " paragraph" + (paragraphs.length !== 1 ? "s" : "") + ". Add == to create paragraph breaks.",
+        "warning"
+      );
+    } else {
+      showStatus(
+        "Found " + markerCount + " marker" + (markerCount !== 1 ? "s" : "") +
+        " \u2192 " + paragraphs.length + " paragraph" + (paragraphs.length !== 1 ? "s" : "") + ".",
+        "success"
+      );
+    }
+  }
+
+  // ── Mode 3: Smart Merge ───────────────────────────────────
+  function fixSmartMerge(raw) {
+    const lines = raw.split(/\n/);
+    const sensitivity = parseInt(sensitivityEl.value, 10);
+    const threshold = PDFLineFixer.sensitivityToThreshold(sensitivity);
+    const result = PDFLineFixer.mergeParagraphs(lines, { threshold: threshold });
+
+    outputEl.value = result.merged.join("\n\n");
+
+    const nonBlank = result.merged.filter(function (t) { return t.trim().length > 0; }).length;
+    outputCount.textContent = nonBlank + " paragraph" + (nonBlank !== 1 ? "s" : "");
+
+    if (result.mergeCount === 0) {
+      showStatus("No line breaks to fix \u2014 text already looks correct.", "info");
+    } else {
+      showStatus(
+        "Merged " + result.mergeCount + " broken line break" + (result.mergeCount !== 1 ? "s" : "") +
+        ". " + lines.length + " lines \u2192 " + nonBlank + " paragraph" + (nonBlank !== 1 ? "s" : "") + ".",
+        "success"
+      );
+    }
+  }
+
+  // ── Copy Button ────────────────────────────────────────────
+  btnCopy.addEventListener("click", function () {
+    const text = outputEl.value;
+    if (!text.trim()) {
+      showStatus("Nothing to copy yet \u2014 fix some text first.", "warning");
+      return;
+    }
+    navigator.clipboard.writeText(text).then(function () {
+      showStatus("Copied to clipboard! Paste into Word with Ctrl+V.", "success");
+    }).catch(function () {
+      outputEl.select();
+      document.execCommand("copy");
+      showStatus("Copied! Paste into Word with Ctrl+V.", "success");
+    });
+  });
+
+  // ── Clear Button ───────────────────────────────────────────
+  btnClear.addEventListener("click", function () {
+    inputEl.value = "";
+    outputEl.value = "";
+    inputCount.textContent = "0 lines";
+    outputCount.textContent = "0 paragraphs";
+    statusEl.className = "status";
+    inputEl.focus();
+  });
+
+  // ── Sensitivity Slider ─────────────────────────────────────
+  sensitivityEl.addEventListener("input", function () {
+    sensitivityVal.textContent = sensitivityEl.value;
+  });
+
+  // ── Live Input Counter ─────────────────────────────────────
+  inputEl.addEventListener("input", function () {
+    const lines = inputEl.value.split(/\n/).filter(function (l) { return l.trim().length > 0; });
+    inputCount.textContent = lines.length + " line" + (lines.length !== 1 ? "s" : "");
+  });
+
+  // ── Drag & Drop ────────────────────────────────────────────
+  let dragCounter = 0;
+
+  document.addEventListener("dragenter", function (e) {
+    e.preventDefault(); dragCounter++; dropOverlay.classList.add("active");
+  });
+  document.addEventListener("dragleave", function (e) {
+    e.preventDefault(); dragCounter--;
+    if (dragCounter <= 0) { dragCounter = 0; dropOverlay.classList.remove("active"); }
+  });
+  document.addEventListener("dragover", function (e) { e.preventDefault(); });
+  document.addEventListener("drop", function (e) {
+    e.preventDefault(); dragCounter = 0; dropOverlay.classList.remove("active");
+    const files = e.dataTransfer.files;
+    if (files.length === 0) return;
+    const file = files[0];
+    if (file.type === "text/plain" || file.name.endsWith(".txt")) {
+      const reader = new FileReader();
+      reader.onload = function (ev) {
+        inputEl.value = ev.target.result;
+        inputEl.dispatchEvent(new Event("input"));
+        showStatus("Loaded \"" + file.name + "\" \u2014 click Fix Line Breaks to process.", "info");
+      };
+      reader.readAsText(file);
+    } else {
+      showStatus("Only .txt files can be dropped. For PDFs, copy the text and paste it.", "warning");
+    }
+  });
+
+  // ── Keyboard Shortcut ──────────────────────────────────────
+  document.addEventListener("keydown", function (e) {
+    if ((e.ctrlKey || e.metaKey) && e.key === "Enter") { e.preventDefault(); btnFix.click(); }
+  });
+
+  // ── Status Helper ──────────────────────────────────────────
+  function showStatus(msg, type) {
+    statusEl.textContent = msg;
+    statusEl.className = "status visible " + (type || "info");
+  }
+
+})();
+</script>
+
+</body>
+</html>
