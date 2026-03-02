@@ -1,6 +1,9 @@
 # PDF-line-fixer
 Standalone tool to fix broken line breaks when pasting PDF text into Word
 
+## Live Tool
+👉 **[Open the tool](https://case-thread.github.io/PDF-line-fixer/pdf-line-fixer.html)**
+
 ## How to use
 
 1. Copy text from your PDF (Ctrl+A, Ctrl+C inside the PDF viewer)
@@ -17,3 +20,4 @@ Standalone tool to fix broken line breaks when pasting PDF text into Word
 ## Notes
 
 - Works entirely in your browser — no data is sent anywhere
+- Any feedback? Email casethread.ai@gmail.com. 
