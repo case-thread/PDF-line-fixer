@@ -448,19 +448,27 @@ footer a:hover { text-decoration: underline; }
     },
   };
 
-  const TERMINAL_PUNCT = /[.!?:]\s*$/;
-  const SEMICOLON_TERMINAL = /;[\)\]]\s*$/;
+  const TERMINAL_PUNCT = /[.!?:。！？：]\s*$/;
+  const SEMICOLON_TERMINAL = /[;；][\)\]）】」』]\s*$/;
   const HYPHENATED_END = /-\s*$/;
   const STARTS_LOWERCASE = /^[a-z]/;
   const STARTS_UPPERCASE = /^[A-Z]/;
+  const STARTS_CJK = /^(?:["'“‘「『（(【\[]\s*)*[\u3400-\u4DBF\u4E00-\u9FFF\uF900-\uFAFF]/;
+  const CJK_NUM = "[一二三四五六七八九十百千万零〇两0-9]{1,8}";
+  const CJK_ENUM = "[一二三四五六七八九十百千万零〇两]{1,4}";
   const HEADING_PATTERN = new RegExp(
     "^(" +
       "\\d+[.):]\\s?" +
+      "|\\d+[、．。]\\s?" +
       "|\\([a-zA-Z0-9]{1,3}\\)" +
+      "|[（(][0-9]{1,3}[)）]\\s?" +
       "|\\([a-zA-Z0-9]{4}\\)\\s" +
       "|\\[[a-zA-Z0-9]{1,3}\\]" +
       "|\\[[a-zA-Z0-9]{4}\\]\\s" +
       "|[a-zA-Z]{1,4}[.):]\\s" +
+      "|[（(]" + CJK_ENUM + "[)）]\\s?" +
+      "|" + CJK_ENUM + "[、．。)]\\s?" +
+      "|第" + CJK_NUM + "[编章节条款项目]\\s?" +
       "|(?:Article|Section|Clause|Part|Schedule|Appendix|Exhibit|Annex|Recital|WHEREAS|NOW\\s*,?\\s*THEREFORE|IN WITNESS)" +
       "|[\\u2022\\u2023\\u25E6\\u2043\\u2219\u2022\u25CF\u25CB\u25A0\u25A1\u25AA\u25AB\u2013\u2014]\\s" +
     ")", "i"
@@ -468,12 +476,17 @@ footer a:hover { text-decoration: underline; }
   const NUMBERED_ITEM = new RegExp(
     "^(" +
       "\\d+[.):]\\s?" +
+      "|\\d+[、．。]\\s?" +
       "|\\([a-zA-Z0-9]{1,3}\\)" +
+      "|[（(][0-9]{1,3}[)）]\\s?" +
       "|\\[[a-zA-Z0-9]{1,3}\\]" +
       "|[a-zA-Z]{1,4}[.):]\\s" +
+      "|[（(]" + CJK_ENUM + "[)）]\\s?" +
+      "|" + CJK_ENUM + "[、．。)]\\s?" +
+      "|第" + CJK_NUM + "[编章节条款项目]\\s?" +
     ")"
   );
-  const ENDS_SEMICOLON = /;\s*$/;
+  const ENDS_SEMICOLON = /[;；]\s*$/;
   const IS_BLANK = /^\s*$/;
   const IS_INDENTED = /^(?:\t|  )/;
   const PAGE_NUMBER = /^Page\s+\d+\s*$/i;
@@ -488,7 +501,7 @@ footer a:hover { text-decoration: underline; }
 
     const isTerminal = TERMINAL_PUNCT.test(current) || SEMICOLON_TERMINAL.test(current);
     if (!isTerminal) score += w.noTerminalPunctuation;
-    if (STARTS_LOWERCASE.test(nextTrimmed)) score += w.nextStartsLowercase;
+    if (STARTS_LOWERCASE.test(nextTrimmed) || STARTS_CJK.test(nextTrimmed)) score += w.nextStartsLowercase;
     if (HYPHENATED_END.test(current)) score += w.hyphenatedEnd;
 
     if (avgLen > 0) {
@@ -496,7 +509,7 @@ footer a:hover { text-decoration: underline; }
       if (curRatio > 0.7 && curRatio < 1.3) score += w.similarLineLength;
     }
 
-    if (isTerminal && STARTS_UPPERCASE.test(nextTrimmed)) score += w.terminalPuncAndUpper;
+    if (isTerminal && (STARTS_UPPERCASE.test(nextTrimmed) || STARTS_CJK.test(nextTrimmed))) score += w.terminalPuncAndUpper;
     if (avgLen > 0 && current.length < avgLen * 0.5 && current.length > 0) score += w.shortTailLine;
     if (HEADING_PATTERN.test(nextTrimmed)) score += w.nextIsHeading;
     var headingMaxLen = Math.max(avgLen * 0.7, 50);
